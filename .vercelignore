@@ -1,0 +1,8 @@
+.git
+node_modules
+dist
+docs
+GAME_BRIEF_KATYA_OLYA_VIETNAM_RU.md
+tests
+test-results
+playwright-report
