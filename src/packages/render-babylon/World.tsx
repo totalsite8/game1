@@ -5,26 +5,57 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
-import { CreateCapsule } from '@babylonjs/core/Meshes/Builders/capsuleBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import '@babylonjs/core/Culling/ray';
-const MeshBuilder = { CreateBox, CreateSphere, CreateCapsule, CreateTorus, CreateLines };
+const MeshBuilder = { CreateBox, CreateSphere, CreateTorus, CreateLines };
 import type { Locale } from '../story/story';
+import { Humanoid, Palette, angleTo } from './humanoid';
+import { HEROINES, TOWNSFOLK, VIETNAMESE_NPCS, type NpcProfile } from '../content/characters';
+import type { LocationId } from '../validation/schemas';
 interface Props {
   place: number;
   hero: 'katya' | 'olya';
   low: boolean;
   paused: boolean;
   locale: Locale;
+  /** Кто сейчас говорит в сцене: id героини или NPC. Управляет жестикуляцией и взглядом. */
+  speaker?: string;
   onInspect: () => void;
 }
-export default function World({ place, hero, low, paused, locale, onInspect }: Props) {
+/** Локации, соответствующие трём процедурным диорамам. */
+const PLACE_LOCATIONS: LocationId[][] = [
+  ['hotel_alley'],
+  ['night_market'],
+  ['riverfront_pier', 'lantern_terrace'],
+];
+/** Маршруты фоновых горожан: замкнутый контур по краю площадки. */
+const WALK_PATHS: [number, number][][] = [
+  [
+    [-9.5, 4.4],
+    [9.5, 4.4],
+    [9.5, 6.6],
+    [-9.5, 6.6],
+  ],
+  [
+    [-9.5, 5.2],
+    [9.5, 5.2],
+    [9.5, 6.8],
+    [-9.5, 6.8],
+  ],
+  [
+    [-9.5, 3.6],
+    [9.5, 3.6],
+    [9.5, 5.6],
+    [-9.5, 5.6],
+  ],
+];
+export default function World({ place, hero, low, paused, locale, speaker, onInspect }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const callback = useRef(onInspect);
   callback.current = onInspect;
@@ -32,7 +63,10 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
   active.current = hero;
   const pause = useRef(paused);
   pause.current = paused;
+  const speakerRef = useRef(speaker);
+  speakerRef.current = speaker;
   const [failed, setFailed] = useState(false);
+  const [cast, setCast] = useState<NpcProfile[]>([]);
   useEffect(() => {
     if (!canvas.current) return;
     let engine: Engine | undefined;
@@ -48,6 +82,8 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
       const scene = new Scene(engine);
       scene.clearColor = new Color4(0.043, 0.093, 0.11, 1);
       scene.ambientColor = new Color3(0.4, 0.35, 0.3);
+      // Персонажей много, поэтому луч берётся только по нажатию, а не на каждое движение мыши.
+      scene.skipPointerMovePicking = true;
       const camera = new ArcRotateCamera(
         'camera',
         Math.PI / 2 + 0.25,
@@ -218,45 +254,106 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
         const boat = ball('boat', 4, -0.02, 11, 2.3, '#74493b');
         boat.scaling.set(1.7, 0.35, 0.65);
       }
-      function person(name: string, x: number, z: number, color: string) {
-        let root = new TransformNode(name, scene);
-        let body = MeshBuilder.CreateCapsule(
-          name,
-          { height: 1.25, radius: 0.26, tessellation: 8 },
-          scene
-        );
-        body.material = mat(color);
-        body.parent = root;
-        body.position.y = 0.95;
-        let head = ball(name, 0, 1.83, 0, 0.46, '#dfaf86');
-        head.parent = root;
-        let hair = ball(name, 0, 1.98, 0.04, 0.48, '#48382e');
-        hair.scaling.y = 0.6;
-        hair.parent = root;
-        for (let dx of [-0.13, 0.13]) {
-          let leg = box(name, dx, 0.27, 0, 0.17, 0.65, 0.19, '#294a53');
-          leg.parent = root;
-        }
-        root.position.set(x, 0, z);
-        return root;
-      }
-      const katya = person('Катя', -1, 1, '#d57543');
-      const olya = person('Оля', 0.1, 1.3, '#4e9caa');
-      const npc = person(
-        'talk',
-        place === 0 ? -4 : place === 1 ? 0 : 4,
-        place === 1 ? 2 : place === 2 ? 5 : -2,
-        '#bdbea0'
+
+      // ── Персонажи ────────────────────────────────────────────────────────
+      // Высота мощения: персонажи стоят на плитке, а не в её толще.
+      const GROUND_Y = 0.063;
+      const palette = new Palette(scene);
+      const katya = new Humanoid('Катя', HEROINES.katya.look, palette, scene, {
+        detail: low ? 1 : 2,
+        facing: 0.35,
+      });
+      const olya = new Humanoid('Оля', HEROINES.olya.look, palette, scene, {
+        detail: low ? 1 : 2,
+        facing: 0.35,
+      });
+      katya.root.position.set(-1, GROUND_Y, 1);
+      olya.root.position.set(0.1, GROUND_Y, 1.3);
+
+      const castProfiles = VIETNAMESE_NPCS.filter((n) =>
+        PLACE_LOCATIONS[place]?.includes(n.location)
       );
+      setCast(castProfiles);
+      const npcs = castProfiles.map((profile) => {
+        const rig = new Humanoid(profile.id, profile.look, palette, scene, {
+          detail: low ? 0 : 1,
+          facing: profile.facing,
+        });
+        rig.root.position.set(profile.position_3d[0], GROUND_Y, profile.position_3d[2]);
+        rig.setPickTag('npc');
+        return { profile, rig };
+      });
+
+      const pathInfo = (pts: [number, number][]) => {
+        const segs = pts.map(([x, z], i) => {
+          const [nx, nz] = pts[(i + 1) % pts.length];
+          return { x, z, nx, nz, len: Math.hypot(nx - x, nz - z) };
+        });
+        return { segs, total: segs.reduce((a, s) => a + s.len, 0) };
+      };
+      const pointAt = (info: ReturnType<typeof pathInfo>, dist: number) => {
+        let d = ((dist % info.total) + info.total) % info.total;
+        for (const s of info.segs) {
+          if (d <= s.len) {
+            const t = s.len > 0 ? d / s.len : 0;
+            return {
+              x: s.x + (s.nx - s.x) * t,
+              z: s.z + (s.nz - s.z) * t,
+              dir: Math.atan2(s.nx - s.x, s.nz - s.z),
+            };
+          }
+          d -= s.len;
+        }
+        const s = info.segs[0];
+        return { x: s.x, z: s.z, dir: Math.atan2(s.nx - s.x, s.nz - s.z) };
+      };
+      const walkers = low
+        ? []
+        : TOWNSFOLK.slice(0, 2).map((look, i) => {
+            const rig = new Humanoid(`townsfolk-${i}`, look, palette, scene, {
+              detail: 0,
+              facing: 0,
+            });
+            const info = pathInfo(WALK_PATHS[place] ?? WALK_PATHS[0]);
+            const start = pointAt(info, i * (info.total / 2) + 1.5);
+            rig.root.position.set(start.x, GROUND_Y, start.z);
+            return { rig, info, dist: i * (info.total / 2) + 1.5, speed: 0.95 + i * 0.22 };
+          });
+
       const beacon = MeshBuilder.CreateTorus(
         'talk',
         { diameter: 1.5, thickness: 0.07, tessellation: 24 },
         scene
       );
-      beacon.position = npc.position.add(new Vector3(0, 0.12, 0));
       beacon.material = mat('#f7d68f', true);
-      let target = katya.position.clone();
-      let keys = new Set<string>();
+      beacon.isPickable = false;
+
+      // Отдельный свет только для персонажей: сцена не меняется, а фигуры читаются объёмнее.
+      const characterMeshes = [
+        ...katya.meshes,
+        ...olya.meshes,
+        ...npcs.flatMap((n) => n.rig.meshes),
+        ...walkers.flatMap((w) => w.rig.meshes),
+      ];
+      // Направление — ход луча: свет приходит с противоположной стороны.
+      // Ключ светит сверху и со стороны камеры, контровой — из-за спин, чтобы читался силуэт.
+      const key = new DirectionalLight('cast-key', new Vector3(-0.3, -0.88, -0.45), scene);
+      key.intensity = 0.16;
+      key.diffuse = Color3.FromHexString('#ffe3bb');
+      key.includedOnlyMeshes = characterMeshes;
+      const rim = new DirectionalLight('cast-rim', new Vector3(0.55, -0.3, 0.7), scene);
+      rim.intensity = 0.12;
+      rim.diffuse = Color3.FromHexString('#9fd8ff');
+      rim.includedOnlyMeshes = characterMeshes;
+
+      // Декорации статичны: фиксируем их мировые матрицы, чтобы не считать их каждый кадр.
+      const animated = new Set(characterMeshes);
+      for (const m of scene.meshes) if (!animated.has(m)) m.freezeWorldMatrix();
+
+      let target = katya.root.position.clone();
+      let clock = 0;
+      let activeNpcId = '';
+      const keys = new Set<string>();
       const down = (e: KeyboardEvent) => {
         if ((e.target as HTMLElement)?.matches('input,button,select,textarea')) return;
         if (
@@ -287,7 +384,7 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
       scene.onPointerObservable.add((info) => {
         if (info.type !== PointerEventTypes.POINTERTAP || pause.current) return;
         let hit = info.pickInfo;
-        if (hit?.pickedMesh?.name === 'talk') {
+        if (hit?.pickedMesh?.metadata?.tag === 'talk') {
           callback.current();
           return;
         }
@@ -301,6 +398,7 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
       const loop = () => {
         if (document.hidden || pause.current) return;
         const delta = Math.min(engine!.getDeltaTime() / 1000, 0.05);
+        clock += delta;
         let dx = 0,
           dz = 0;
         if (keys.has('w') || keys.has('ц') || keys.has('ArrowUp')) dz = -1;
@@ -309,15 +407,99 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
         if (keys.has('d') || keys.has('в') || keys.has('ArrowRight')) dx = 1;
         const lead = active.current === 'katya' ? katya : olya,
           follow = active.current === 'katya' ? olya : katya;
-        if (dx || dz) target = lead.position.add(new Vector3(dx, 0, dz));
+        if (dx || dz) target = lead.root.position.add(new Vector3(dx, 0, dz));
         target.x = Math.max(-5.4, Math.min(8, target.x));
         target.z = Math.max(-1, Math.min(6.2, target.z));
-        const dir = target.subtract(lead.position);
+        const dir = target.subtract(lead.root.position);
         dir.y = 0;
-        if (dir.length() > 0.08)
-          lead.position.addInPlace(dir.normalize().scale(Math.min(3 * delta, dir.length())));
-        const ft = lead.position.add(new Vector3(0.9, 0, 0.7));
-        follow.position = Vector3.Lerp(follow.position, ft, delta * 3);
+        let leadStep = 0;
+        let leadDirX = 0;
+        let leadDirZ = 0;
+        if (dir.length() > 0.08) {
+          leadStep = Math.min(3 * delta, dir.length());
+          leadDirX = dir.x / dir.length();
+          leadDirZ = dir.z / dir.length();
+          lead.root.position.addInPlace(dir.normalize().scale(leadStep));
+        }
+        const followBefore = follow.root.position.clone();
+        const ft = lead.root.position.add(new Vector3(0.9, 0, 0.7));
+        follow.root.position = Vector3.Lerp(follow.root.position, ft, delta * 3);
+        const followStep = Vector3.Distance(followBefore, follow.root.position);
+
+        // Кто сейчас говорит: он жестов не жалеет, остальные слушают.
+        const speakerId = speakerRef.current ?? '';
+        const talking = npcs.find((n) => n.profile.id === speakerId) ?? npcs[0];
+        if (talking && talking.profile.id !== activeNpcId) {
+          activeNpcId = talking.profile.id;
+          for (const n of npcs) {
+            const isActive = n.profile.id === activeNpcId;
+            n.rig.setPickTag(isActive ? 'talk' : 'npc');
+            n.rig.setPickable(isActive);
+          }
+          beacon.position.set(
+            talking.rig.root.position.x,
+            GROUND_Y + 0.12,
+            talking.rig.root.position.z
+          );
+        }
+        if (talking) {
+          beacon.rotation.y += delta * 0.7;
+          const pulse = 1 + 0.05 * Math.sin(clock * 2.2);
+          beacon.scaling.set(pulse, 1, pulse);
+        }
+
+        const leadHead = lead.headPosition();
+        const followHead = follow.headPosition();
+        const talkHead = talking ? talking.rig.headPosition() : null;
+        const talkDistance = talking
+          ? Vector3.Distance(lead.root.position, talking.rig.root.position)
+          : Infinity;
+        // Голова поворачивается к собеседнику издалека, корпус — только вблизи:
+        // иначе героиня всё время стояла бы спиной к камере.
+        const lookAtNpc = talkDistance < 8 ? talkHead : null;
+        const faceNpc = talkDistance < 3.2;
+        // Идущая героиня смотрит по ходу, стоящая — на собеседника.
+        const leadFacing =
+          leadStep > 0.0005
+            ? Math.atan2(leadDirX, leadDirZ)
+            : faceNpc
+              ? angleTo(lead.root.position, talking!.rig.root.position)
+              : lead.facing;
+        lead.update(delta, {
+          distance: leadStep,
+          facing: leadFacing,
+          lookAt: lookAtNpc,
+          talk: speakerId === (active.current === 'katya' ? 'katya' : 'olya') ? 1 : 0,
+        });
+        follow.update(delta, {
+          distance: followStep,
+          facing: followStep > 0.0005 ? angleTo(followBefore, follow.root.position) : leadFacing,
+          lookAt: talkHead ?? leadHead,
+          talk: speakerId === (active.current === 'katya' ? 'olya' : 'katya') ? 1 : 0,
+        });
+
+        for (const n of npcs) {
+          const d = Vector3.Distance(n.rig.root.position, lead.root.position);
+          n.rig.update(delta, {
+            distance: 0,
+            facing: d < 3.6 ? angleTo(n.rig.root.position, lead.root.position) : n.profile.facing,
+            lookAt: d < 7 ? leadHead : null,
+            talk: n.profile.id === speakerId ? 1 : 0,
+          });
+        }
+
+        for (const w of walkers) {
+          w.dist += w.speed * delta;
+          const p = pointAt(w.info, w.dist);
+          const before = w.rig.root.position.clone();
+          w.rig.root.position.set(p.x, GROUND_Y, p.z);
+          w.rig.update(delta, {
+            distance: Vector3.Distance(before, w.rig.root.position),
+            facing: p.dir,
+            talk: 0,
+          });
+        }
+
         scene.render();
       };
       engine.runRenderLoop(loop);
@@ -330,29 +512,45 @@ export default function World({ place, hero, low, paused, locale, onInspect }: P
         scene.dispose();
         engine?.dispose();
       };
-    } catch {
+    } catch (error) {
+      // Текстовый режим — рабочий путь, поэтому падение renderer-а не должно ронять игру.
+      console.error('[world] 3D-сцена недоступна', error);
       engine?.dispose();
       setFailed(true);
     }
     return cleanup;
   }, [place, low]);
-  return failed ? (
-    <div className="world-fallback">
-      <p>
-        {locale === 'ru'
-          ? '3D недоступно на этом устройстве. История полностью доступна через кнопки ниже.'
-          : '3D is unavailable. The full story remains accessible using the buttons below.'}
-      </p>
-    </div>
-  ) : (
-    <canvas
-      ref={canvas}
-      aria-label={
-        locale === 'ru'
-          ? '3D-локация. Нажмите на землю для перемещения.'
-          : '3D scene. Tap the ground to move.'
-      }
-      tabIndex={0}
-    />
+  if (failed)
+    return (
+      <div className="world-fallback">
+        <p>
+          {locale === 'ru'
+            ? '3D недоступно на этом устройстве. История полностью доступна через кнопки ниже.'
+            : '3D is unavailable. The full story remains accessible using the buttons below.'}
+        </p>
+      </div>
+    );
+  return (
+    <>
+      <canvas
+        ref={canvas}
+        aria-label={
+          locale === 'ru'
+            ? '3D-локация. Нажмите на землю для перемещения.'
+            : '3D scene. Tap the ground to move.'
+        }
+        tabIndex={0}
+      />
+      {cast.length > 0 && (
+        <div className="world-cast">
+          {cast.map((p) => (
+            <span key={p.id} className={p.id === speaker ? 'speaking' : undefined}>
+              <b>{locale === 'ru' ? p.name_ru : p.name_en}</b>
+              {locale === 'ru' ? p.role_ru : p.role_en}
+            </span>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
