@@ -23,7 +23,7 @@
     "lucide-react": "1.51.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "3.25.76"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
