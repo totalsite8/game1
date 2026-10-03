@@ -1,7 +1,7 @@
 # Файл проекта — «Маршрут без фильтра»
 
 **Обновлено:** 2026-10-03. **Версия:** 0.1.0 — первый играбельный прототип.
-**Репозиторий:** totalsite8/game1. **Ветка сессии:** `arena/01a102d0-game1`.
+**Репозиторий:** totalsite8/game1. **Ветка сессии:** `arena/01a1030b-game1`.
 
 ## Начало новой сессии
 
@@ -47,8 +47,9 @@
 
 ## GitHub
 
-- Код отправлен в `arena/01a102d0-game1`.
-- Pull request: https://github.com/totalsite8/game1/pull/1 (не смержен).
+- Код отправлен в `arena/01a1030b-game1`.
+- Pull request персонажей: https://github.com/totalsite8/game1/pull/4 (открыт).
+- Ранее: PR https://github.com/totalsite8/game1/pull/1 — смержен, коммит `6956012`.
 - GitHub Actions проверил установку, форматирование, unit, build, audit и production browser tests: https://github.com/totalsite8/game1/actions/runs/37143668410 — success.
 - После первого успешного CI workflow обновлён: актуальные actions v7 закреплены по SHA, runner ubuntu-24.04 закреплён против неожиданной миграции ubuntu-latest. Проверить последнюю повторную сборку при продолжении.
 

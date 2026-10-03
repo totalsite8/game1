@@ -42,7 +42,7 @@ TEST_URL=http://localhost:5173 LD_LIBRARY_PATH=/tmp/route-browser-libs/lib npm r
 
 ## Публикация
 
-[Инструкция Vercel](docs/DEPLOYMENT.md). Рабочая ветка: `arena/01a102d0-game1`.
+[Инструкция Vercel](docs/DEPLOYMENT.md). Рабочая ветка: `arena/01a1030b-game1`.
 
 Конфигурация Vercel и функции созданы. **Деплой не выполнен: Vercel CLI не авторизован**, а временный деплой был отклонён сервисом. GitHub-аутентификация не предоставляет доступа к Vercel.
 
