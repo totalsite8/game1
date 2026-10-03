@@ -42,6 +42,13 @@
 - Исправлен найденный offline-баг: cache.match учитывал `Vary: Origin` у module assets; для своих immutable precache URL применяется `ignoreVary`.
 - **Не проверено:** реальные iPhone/Safari, Android GPU, Telegram WebView, gamepad, 30/60 FPS на целевых телефонах, screen reader/контраст комплексно, культурная экспертиза. Viewport-тест — не тест реального телефона.
 
+## GitHub
+
+- Код отправлен в `arena/01a102d0-game1`.
+- Pull request: https://github.com/totalsite8/game1/pull/1 (не смержен).
+- GitHub Actions проверил установку, форматирование, unit, build, audit и production browser tests: https://github.com/totalsite8/game1/actions/runs/37143668410 — success.
+- После первого успешного CI workflow обновлён: актуальные actions v7 закреплены по SHA, runner ubuntu-24.04 закреплён против неожиданной миграции ubuntu-latest. Проверить последнюю повторную сборку при продолжении.
+
 ## Деплой — блокер доступа
 
 - Arena preview: dev port 5173; production preview port 4173.
