@@ -520,6 +520,7 @@ export default function App() {
                       low={low}
                       paused={!!panel}
                       locale={locale}
+                      speaker={beat.speaker}
                       onInspect={() => open(finished ? 'ending' : 'dialogue')}
                     />
                   </Suspense>

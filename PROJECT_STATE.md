@@ -1,7 +1,7 @@
 # Файл проекта — «Маршрут без фильтра»
 
 **Обновлено:** 2026-10-03. **Версия:** 0.1.0 — первый играбельный прототип.
-**Репозиторий:** totalsite8/game1. **Ветка сессии:** `arena/01a102d0-game1`.
+**Репозиторий:** totalsite8/game1. **Ветка сессии:** `arena/01a1030b-game1`.
 
 ## Начало новой сессии
 
@@ -22,6 +22,8 @@
 - Главный экран с оригинальной AI-иллюстрацией, локальными шрифтами, адаптивной вёрсткой.
 - Три процедурных диорамы (отель, рынок, набережная); камера orbit, tap-to-move, WASD/стрелки, две фигурки-героини, взаимодействие с NPC через click/tap или DOM-кнопку.
 - Эпизод «Карта без адреса»: 12 выборов, последствия для доверия/безопасности/денег/батареи/времени/фактов, журнал, карта последовательности.
+- **Персонажи доведены до объёма 0.1.0+:** библия психологии/биографии/речи/противоречий (Катя, Оля, 6 вьетнамских NPC, 3 горожанина), культурная конкретика Дананга/Хойана, 4 карточки travel-safety.
+- Процедурные персонажи заменили маркеры: `Humanoid` строит фигуру по `LookProfile` (телосложение, причёска, низ, рукав, реквизит, осанка) в 3 уровнях детализации, с лицом (глаза/веки/брови/нос/губы/уши/волосы), походкой, позами, дыханием, морганием, взглядом на собеседника и репликой «под нос»; силуэт и анимация откалиброваны по измерениям.
 - Четыре исхода: честный маршрут, безопасность, сенсация, восстановленное доверие. Не шесть production-финалов из брифа.
 - RU/EN для игрового интерфейса и сценария.
 - IndexedDB autosave; экспорт JSON, импорт через валидацию и replay, удаление/рестарт с подтверждением. Запись сериализована; ошибки не выдаются за успех.
@@ -37,15 +39,17 @@
 - `npm run typecheck`, `npm run build`, `npm run format:check`: успешно.
 - `npm test`: **5 тестов**, в том числе обход всех достижимых путей и всех четырёх исходов, проверка импортов/границ, HMAC positive/negative/expiry.
 - Production Playwright: **5 тестов успешно**: полный путь в 3D + журнал + reload; 390px RU/EN text mode + export/import/delete; API; offline reload + следующий выбор; 320/768/1024px + искусственный отказ WebGL + Escape.
-- Скриншоты: `docs/home-desktop.png`, `docs/home-mobile.png`, `docs/game-desktop.png`. Именно procedural 3D, не художественная обложка, является текущей игровой графикой.
+- Скриншоты: `docs/home-desktop.png`, `docs/home-mobile.png`, `docs/game-desktop.png`, `docs/game-characters.png` (крупный план фигур). Именно procedural 3D, не художественная обложка, является текущей игровой графикой.
+- Процедурные персонажи измерены headless-пробами: рост 7,5 голов, ширина плеч ~0,40 м, таза ~0,30 м (поправлено с 0,62/0,55), ступни на земле (y≈0,067 при GROUND_Y 0,063), шаг 0,72·H, противофаза ног (остаток 0,03 рад), дыхание ~17 мм, перенос веса ~15 мм, моргание и взгляд на собеседника работают; клик по NPC открывает диалог. Персонажи светлее вертикалей сцены, пересветов нет.
 - `npm audit`: 0 известных уязвимостей на момент проверки.
 - Исправлен найденный offline-баг: cache.match учитывал `Vary: Origin` у module assets; для своих immutable precache URL применяется `ignoreVary`.
 - **Не проверено:** реальные iPhone/Safari, Android GPU, Telegram WebView, gamepad, 30/60 FPS на целевых телефонах, screen reader/контраст комплексно, культурная экспертиза. Viewport-тест — не тест реального телефона.
 
 ## GitHub
 
-- Код отправлен в `arena/01a102d0-game1`.
-- Pull request: https://github.com/totalsite8/game1/pull/1 (не смержен).
+- Код отправлен в `arena/01a1030b-game1`.
+- Pull request персонажей: https://github.com/totalsite8/game1/pull/4 (открыт).
+- Ранее: PR https://github.com/totalsite8/game1/pull/1 — смержен, коммит `6956012`.
 - GitHub Actions проверил установку, форматирование, unit, build, audit и production browser tests: https://github.com/totalsite8/game1/actions/runs/37143668410 — success.
 - После первого успешного CI workflow обновлён: актуальные actions v7 закреплены по SHA, runner ubuntu-24.04 закреплён против неожиданной миграции ubuntu-latest. Проверить последнюю повторную сборку при продолжении.
 
@@ -60,18 +64,19 @@
 
 ## Карта кода
 
-| Путь | Назначение |
-|---|---|
-| `src/App.tsx`, `src/styles.css` | Главное меню, игра, модальные экраны, responsive |
-| `src/packages/story/story.ts` | Локализованные beats, choices, observations, endings |
-| `src/packages/game-core/core.ts` | Чистая функция choose, restore/replay, ending |
-| `src/packages/platform/storage.ts` | IndexedDB и очередь записи/удаления |
-| `src/packages/render-babylon/World.tsx` | Рендер/геометрия/input; cleanup и pause |
-| `src/packages/content/*` | Черновая библия персонажей и каталог 36 идей; НЕ 36 игр |
-| `src/packages/validation/schemas.ts` | Типы каталога, схема initData |
-| `api/*` | health, HMAC verification, отключённая синхронизация |
-| `scripts/build-sw.mjs` | Генерация offline worker после build |
-| `tests/core.test.ts`, `tests/browser/*` | Unit + браузерные проверки |
+| Путь                                      | Назначение                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/App.tsx`, `src/styles.css`           | Главное меню, игра, модальные экраны, responsive                              |
+| `src/packages/story/story.ts`             | Локализованные beats, choices, observations, endings                          |
+| `src/packages/game-core/core.ts`          | Чистая функция choose, restore/replay, ending                                 |
+| `src/packages/platform/storage.ts`        | IndexedDB и очередь записи/удаления                                           |
+| `src/packages/render-babylon/World.tsx`   | Рендер мира/ input; cleanup и pause                                           |
+| `src/packages/render-babylon/humanoid.ts` | Процедурная фигура персонажа: пропорции, лицо, позы, походка, дыхание, взгляд |
+| `src/packages/content/*`                  | Библия персонажей + LookProfile для 3D; каталог 36 идей — НЕ 36 игр           |
+| `src/packages/validation/schemas.ts`      | Типы каталога, схема initData                                                 |
+| `api/*`                                   | health, HMAC verification, отключённая синхронизация                          |
+| `scripts/build-sw.mjs`                    | Генерация offline worker после build                                          |
+| `tests/core.test.ts`, `tests/browser/*`   | Unit + браузерные проверки                                                    |
 
 ## Осознанные ограничения
 
@@ -79,7 +84,7 @@
 - Только WebGL renderer. WebGPU, GLB/KTX2/LOD, физика/коллизии, gamepad/joystick, анимации/лица, музыка/озвучка не реализованы.
 - Управление героиней пока не влияет на доступность реплик; нет индивидуальных abilities. Нет свободного backtracking по карте.
 - Показатели бюджета/времени/батареи меняются, но пока нет отдельного состояния истощения/recovery-геймплея.
-- Персонаж на сцене — условный маркер; диалоговые NPC реализованы текстом, не отдельными production-моделями.
+- Персонаж на сцене — процедурная стилизованная фигура, не production-модель с лицевой анимацией/артикуляцией; диалоги по-прежнему текстовые, без озвучки и мимики уровня AAA.
 - Полный monorepo не создан: модульные папки внутри одного приложения. Workspace extraction при появлении bot/admin.
 - Нет managed DB, сессий, rate limit, sync conflict UI, Telegram SDK/бота, store wrapper. `/telegram` — тот же гостевой web client, не интегрированная Mini App.
 - HMAC endpoint не авторизует пользователя на сервере и не выдаёт cookies. Нельзя подключить облако, доверяя просто присланным slot/stats.
